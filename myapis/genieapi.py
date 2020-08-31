@@ -19,9 +19,7 @@ mysql = MySQL(app)
 
 #Handles DB Operation
 class DB:
-
     result=None
-
     @classmethod
     def getConnection(cls):
         return mysql.connection.cursor()
@@ -58,7 +56,6 @@ class DB:
 #Handles Login Operation
 class Login(Resource):
     def post(self):
-
         jsonvalue = request.json
         userName = jsonvalue.get("username")
         password = jsonvalue.get("password")
@@ -77,6 +74,31 @@ class Login(Resource):
                 response="Login_Success"
             else:
                 response = "Invalid Crendentials"
+        return response
+
+    def delete(self):
+        jsonvalue = request.json
+        userName = jsonvalue.get("username")
+        password = jsonvalue.get("password")
+        result= DB.readData("select password from login_details where username='"+userName+"'")
+
+        if (len(result))==0:
+            response="User Doesnt Exist"
+        else:
+            for row in result:
+              hashed_password= row[0]
+            login_success=False
+            print(bcrypt.verify(password, hashed_password))
+            if bcrypt.verify(password, hashed_password):
+                login_success=True
+            if(login_success):
+                updateMsg = DB.updateData("Delete from login_details where username='" + userName + "'")
+                if updateMsg.find("Successful") >= 0:
+                    response="Account Got Deleted Successfully"
+                else:
+                    response="Error Deleting Account"
+            else:
+                response="Please Enter valid credentials"
         return response
 
 #Handle Sign up Operation
@@ -105,7 +127,7 @@ class SignUp(Resource):
 
 
 api.add_resource(SignUp, '/signup')
-api.add_resource(Login, '/login')
+api.add_resource(Login, '/login','/delete')
 
 if __name__ == '__main__':
     app.run(debug=True)
