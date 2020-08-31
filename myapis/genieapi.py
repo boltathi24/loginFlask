@@ -17,27 +17,7 @@ app.config['MYSQL_PORT'] = 3306
 mysql = MySQL(app)
 
 
-# class Genie(Resource):
-#     def get(self):
-#         cur = mysql.connection.cursor()
-#         cur.execute("select * from login_details")
-#         rv = cur.fetchall()
-#         return str(rv)
-#
-#     def post(self):
-#         jsonvalue=request.json
-#         username=jsonvalue.get("username")
-#         password = jsonvalue.get("username")
-#         response=""
-#         if(movieName=='Spiderman'):
-#             response="I have the movie"
-#         else:
-#             response="I dont have the movie You requested"
-#         return response
-
-
-
-
+#Handles DB Operation
 class DB:
 
     result=None
@@ -51,16 +31,13 @@ class DB:
         print(query)
         updateMsg="False"
         try:
-
             cursor=DB.getConnection()
             cursor.execute(query)
-
-
             DB.result=cursor.fetchall()
 
         except Exception as e:
             updateMsg="Exception"+str(e)
-            print(updateMsg)
+
         if updateMsg.find("Exception") >= 0:
             DB.result =()
 
@@ -78,18 +55,14 @@ class DB:
             updateMsg=str(e)
         return updateMsg
 
-
+#Handles Login Operation
 class Login(Resource):
     def post(self):
-        # cur = mysql.connection.cursor()
+
         jsonvalue = request.json
         userName = jsonvalue.get("username")
         password = jsonvalue.get("password")
-
-        # DB.getConnection().execute("select password from login_details where username='"+userName+"'")
         result= DB.readData("select password from login_details where username='"+userName+"'")
-        # print(DB.sqlconnection)
-        # result= DB.getConnection().fetchall()
 
         if (len(result))==0:
             response="User Doesnt Exist"
@@ -104,14 +77,12 @@ class Login(Resource):
                 response="Login_Success"
             else:
                 response = "Invalid Crendentials"
-
         return response
 
-
+#Handle Sign up Operation
 class SignUp(Resource):
 
     def post(self):
-        cur = mysql.connection.cursor()
         jsonvalue = request.json
         userName = jsonvalue.get("username")
 
@@ -119,40 +90,18 @@ class SignUp(Resource):
         password = bcrypt.hash(password)
 
         response = ""
-        # try:
-        query = "INSERT INTO login_details (username, password) VALUES ('"+userName+"' , '"+password+"')"
-        print(query)
-        print(DB.getConnection())
-        responseOfUpdate=DB.updateData(query)
-        print(responseOfUpdate)
-        if responseOfUpdate.find("Successful") >= 0:
-            response ="Successfully Created"
-        else:
-            response = "Error Creating Account"
-        #     mysql.connection.commit()
-        #     response = "SuccessFully Created"
-        # except Exception as e:
-        #     print(e)
-        #     response = "Error Creating Account"
-        return response
+        try:
+            query = "INSERT INTO login_details (username, password) VALUES ('"+userName+"' , '"+password+"')"
+            responseOfUpdate=DB.updateData(query)
+            if responseOfUpdate.find("Successful") >= 0:
+                response ="Successfully Created"
+            else:
+                response = "Error Creating Account"
 
-    # def post(self):
-    #     cur = mysql.connection.cursor()
-    #     jsonvalue = request.json
-    #     userName = jsonvalue.get("username")
-    #
-    #     password = jsonvalue.get("password")
-    #     password = bcrypt.hash(password)
-    #     response=""
-    #     try:
-    #         sql='INSERT INTO login_details (user_id, username, password) VALUES (%s, %s, %s)'
-    #         cur.execute(sql, (3,userName, password))
-    #         mysql.connection.commit()
-    #         response="SuccessFully Created"
-    #     except Exception as e:
-    #         print(e)
-    #         response="Error Creating Account"
-    #     return response
+        except Exception as e:
+            print(e)
+            response = "Error Creating Account"
+        return response
 
 
 api.add_resource(SignUp, '/signup')
