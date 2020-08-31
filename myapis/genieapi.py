@@ -96,9 +96,7 @@ class Login(Resource):
                 if updateMsg.find("Successful") >= 0:
                     response="Account Got Deleted Successfully"
                 else:
-                    response="Error Deleting Account"
-            else:
-                response="Please Enter valid credentials"
+                    response="Please Enter valid credentials"
         return response
 
 #Handle Sign up Operation
@@ -127,7 +125,7 @@ class SignUp(Resource):
 
 
 api.add_resource(SignUp, '/signup')
-api.add_resource(Login, '/login','/delete')
+api.add_resource(Login, '/login')
 
 if __name__ == '__main__':
     app.run(debug=True)
