@@ -124,14 +124,17 @@ class Login(Resource):
 class ApiJWTAuth(Resource):
 
     def post(self):
-        jsonvalue = request.json
-        token = jsonvalue.get("token")
-        jwtAuth=JWTHandling.decode_auth_token(token)
+        headersvalue = request.headers
+        if 'jwt-token' in headersvalue:
+            token = headersvalue.get("jwt-token")
+            jwtAuth=JWTHandling.decode_auth_token(token)
 
-        if jwtAuth.find("expired") >= 0 or jwtAuth.find("Invalid") >= 0 :
-            return jsonify({"message":"Invalid JWT"})
+            if jwtAuth.find("expired") >= 0 or jwtAuth.find("Invalid") >= 0 :
+                return jsonify({"message":"Invalid JWT"})
+            else:
+                return jsonify({"message":"Valid JWT","username":jwtAuth})
         else:
-            return jsonify({"message":"Valid JWT","username":jwtAuth})
+            return jsonify({"message": "JWT Token is Required"})
 
 
 class JWTHandling:
