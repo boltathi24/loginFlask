@@ -1,4 +1,4 @@
-from flask import Flask,request
+from flask import Flask,request,jsonify
 from flask_restful import Resource, Api
 from flask_mysqldb import MySQL
 from passlib.hash import bcrypt
@@ -6,13 +6,15 @@ import logging
 from cassandra import ConsistencyLevel
 from cassandra.cluster import Cluster, BatchStatement
 from cassandra.query import SimpleStatement
+import jwt,datetime
+
 from cassandra.auth import PlainTextAuthProvider
 
 
 app = Flask(__name__)
 api = Api(app)
 
-
+app.config['SECRET_KEY']="SecretykeytoGetStarted"
 
 #Handles DB Operation
 class DB:
@@ -63,9 +65,9 @@ class Login(Resource):
         userName = jsonvalue.get("username")
         password = jsonvalue.get("password")
         result= DB.readData("select password from mydb.login_details where username='"+userName+"';")
-
+        response=None
         if not result:
-            response="User Doesnt Exist"
+            response=jsonify({"message":"User Doesnt Exist"})
         else:
             hashed_password=""
             for row in result:
@@ -79,10 +81,97 @@ class Login(Resource):
             if bcrypt.verify(password, hashed_password):
                 login_success=True
             if(login_success):
-                response="Login_Success"
+
+                print(userName)
+                token=JWTHandling.encode_auth_token(userName)
+                dec=token.decode('utf-8')
+                response=jsonify(token=dec)
+
+
             else:
-                response = "Invalid Crendentials"
+                response = jsonify({"message":"Invalid Credentials"})
         return response
+
+    def delete(self):
+        jsonvalue = request.json
+        userName = jsonvalue.get("username")
+        password = jsonvalue.get("password")
+        result = DB.readData("select password from mydb.login_details where username='" + userName + "';")
+        response = None
+        if not result:
+            response = jsonify({"message": "User Doesnt Exist"})
+        else:
+            hashed_password = ""
+            for row in result:
+                hashed_password = row.password
+
+            for row in result:
+                hashed_password = row[0]
+            login_success = False
+            print(bcrypt.verify(password, hashed_password))
+            if bcrypt.verify(password, hashed_password):
+                login_success = True
+            if (login_success):
+                result = DB.readData("delete from mydb.login_details where username='" + userName + "';")
+
+                response = jsonify({"message": "Successfully Deleted"})
+
+
+            else:
+                response = jsonify({"message": "Invalid Credentials"})
+        return response
+
+class ApiJWTAuth(Resource):
+
+    def post(self):
+        jsonvalue = request.json
+        token = jsonvalue.get("token")
+        jwtAuth=JWTHandling.decode_auth_token(token)
+
+        if jwtAuth.find("expired") >= 0 or jwtAuth.find("Invalid") >= 0 :
+            return jsonify({"message":"Invalid JWT"})
+        else:
+            return jsonify({"message":"Valid JWT","username":jwtAuth})
+
+
+class JWTHandling:
+
+    @classmethod
+    def decode_auth_token(cls,auth_token):
+        """
+        Decodes the auth token
+        :param auth_token:
+        :return: integer|string
+        """
+        print(auth_token)
+        try:
+            payload = jwt.decode(auth_token, app.config['SECRET_KEY'])
+            return payload['username']
+        except jwt.ExpiredSignatureError:
+            return 'Signature expired. Please log in again.'
+        except jwt.InvalidTokenError:
+            return 'Invalid token. Please log in again.'
+
+    @classmethod
+    def encode_auth_token(self, user_id):
+        """
+        Generates the Auth Token
+        :return: string
+        """
+        print("ins"+user_id)
+        try:
+            payload = {
+                'exp': datetime.datetime.utcnow() + datetime.timedelta( minutes=5),
+
+                'username': user_id
+            }
+            return jwt.encode(
+                payload,
+                app.config.get('SECRET_KEY'),
+                algorithm='HS256'
+            )
+        except Exception as e:
+            return e
 
     def delete(self):
         jsonvalue = request.json
@@ -91,7 +180,7 @@ class Login(Resource):
         result= DB.readData("select password from mydb.login_details where username='"+userName+"'")
 
         if not result:
-            response = "User Doesnt Exist"
+            response = jsonify({"message":"User Doesnt Exist"})
         else:
             for row in result:
               hashed_password=row.password
@@ -102,11 +191,11 @@ class Login(Resource):
             if(login_success):
                 updateMsg = DB.updateData("Delete from mydb.login_details where username='" + userName + "';")
                 if updateMsg.find("Successful") >= 0:
-                    response="Account Got Deleted Successfully"
+                    response= jsonify({"message":"Account Deletion is successful"})
                 else:
-                    response="Error Deleting Account"
+                    response= jsonify({"message":"Error deleting Account"})
             else:
-                response="Please Enter valid credentials"
+                response= jsonify({"message":"Please Enter Valid Credentials"})
         return response
 
 #Handle Sign up Operation
@@ -125,65 +214,21 @@ class SignUp(Resource):
 
             responseOfUpdate=DB.updateData(query)
             if responseOfUpdate.find("Successful") >= 0:
-                response ="Successfully Created"
+                response = jsonify({"message":"Account Creation is successful"})
             else:
-                response = "Error Creating Account"
+                response =  jsonify({"message":"Error in Account Creation "})
 
         except Exception as e:
             print(e)
-            response = "Error Creating Account"
+            response = jsonify({"message":"Error in Account Creation "})
         return response
 
 
 api.add_resource(SignUp, '/signup')
 api.add_resource(Login, '/login','/delete')
+api.add_resource(ApiJWTAuth, '/validatejwt')
 
 if __name__ == '__main__':
     DB.setConnection("mydb")
     app.run(debug=True)
 
-
-# class PythonCassandraExample:
-#     def __init__(self):
-#         self.cluster = None
-#         self.session = None
-#         self.keyspace = None
-#         self.log = None
-#     def __del__(self):
-#         self.cluster.shutdown()
-#     def createsession(self):
-#         self.cluster = Cluster(['localhost'])
-#         self.session = self.cluster.connect(self.keyspace)
-#     def getsession(self):
-#         return self.session
-#     # How about Adding some log info to see what went wrong
-#     def setlogger(self):
-#         log = logging.getLogger()
-#         log.setLevel('INFO')
-#         handler = logging.StreamHandler()
-#         handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
-#         log.addHandler(handler)
-#         self.log = log
-#     # Create Keyspace based on Given Name
-#
-#
-#     # lets do some batch insert
-#     def insert_data(self,query):
-#         insert_sql = self.session.prepare(query)
-#         batch = BatchStatement()
-#         batch.add(query)
-#
-#         self.session.execute(batch)
-#         self.log.info('Batch Insert Completed')
-#
-#     def select_data(self,query):
-#         rows = self.session.execute(query)
-#         return rows
-#
-#
-# if __name__ == '__main__':
-#     example1 = PythonCassandraExample()
-#     example1.createsession()
-#     example1.setlogger()
-#     example1.insert_data()
-#     example1.select_data()
