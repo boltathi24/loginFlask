@@ -1,4 +1,5 @@
 from flask import Flask,request,jsonify
+from flask_redis import FlaskRedis
 from flask_restful import Resource, Api
 from flask_mysqldb import MySQL
 from passlib.hash import bcrypt
@@ -7,6 +8,7 @@ from cassandra import ConsistencyLevel
 from cassandra.cluster import Cluster, BatchStatement
 from cassandra.query import SimpleStatement
 import jwt,datetime
+import redis
 
 from cassandra.auth import PlainTextAuthProvider
 
@@ -14,7 +16,13 @@ from cassandra.auth import PlainTextAuthProvider
 app = Flask(__name__)
 api = Api(app)
 
+# REDIS_URL = "redis://:password@127.0.0.1:6379/0"
 app.config['SECRET_KEY']="SecretykeytoGetStarted"
+# redis_client = FlaskRedis(app)
+
+
+
+rediscon = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, password='password', socket_timeout=None, connection_pool=None, charset='utf-8', errors='strict', unix_socket_path=None)
 
 #Handles DB Operation
 class DB:
@@ -86,6 +94,8 @@ class Login(Resource):
                 token=JWTHandling.encode_auth_token(userName)
                 dec=token.decode('utf-8')
                 response=jsonify(token=dec)
+                rediscon.__setitem__(userName,token)
+                # redis_client.__setitem__(userName,token)
 
 
             else:
@@ -115,7 +125,7 @@ class Login(Resource):
                 result = DB.readData("delete from mydb.login_details where username='" + userName + "';")
 
                 response = jsonify({"message": "Successfully Deleted"})
-
+                rediscon.__delitem__(userName)
 
             else:
                 response = jsonify({"message": "Invalid Credentials"})
@@ -123,7 +133,8 @@ class Login(Resource):
 
 class ApiJWTAuth(Resource):
 
-    def post(self):
+    def get(self):
+
         headersvalue = request.headers
         if 'jwt-token' in headersvalue:
             token = headersvalue.get("jwt-token")
@@ -131,8 +142,10 @@ class ApiJWTAuth(Resource):
 
             if jwtAuth.find("expired") >= 0 or jwtAuth.find("Invalid") >= 0 :
                 return jsonify({"message":"Invalid JWT"})
-            else:
+            elif rediscon.exists(jwtAuth):
                 return jsonify({"message":"Valid JWT","username":jwtAuth})
+            else:
+                return jsonify({"Message":"Please Create new JWT Token"})
         else:
             return jsonify({"message": "JWT Token is Required"})
 
