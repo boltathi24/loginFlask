@@ -12,17 +12,20 @@ import redis
 
 from cassandra.auth import PlainTextAuthProvider
 
+from myapis.rediscon import redisconnection
+from myapis.JWTHandling import ApiJWTAuthentication
 
 app = Flask(__name__)
 api = Api(app)
 
+
 # REDIS_URL = "redis://:password@127.0.0.1:6379/0"
-app.config['SECRET_KEY']="SecretykeytoGetStarted"
+# app.config['SECRET_KEY']="SecretykeytoGetStarted"
 # redis_client = FlaskRedis(app)
 
 
 
-rediscon = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, password='password', socket_timeout=None, connection_pool=None, charset='utf-8', errors='strict', unix_socket_path=None)
+# rediscon = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, password='password', socket_timeout=None, connection_pool=None, charset='utf-8', errors='strict', unix_socket_path=None)
 
 #Handles DB Operation
 class DB:
@@ -91,10 +94,10 @@ class Login(Resource):
             if(login_success):
 
                 print(userName)
-                token=JWTHandling.encode_auth_token(userName)
+                token=ApiJWTAuthentication.encode_auth_token(userName)
                 dec=token.decode('utf-8')
                 response=jsonify(token=dec)
-                rediscon.__setitem__(userName,token)
+                redisconnection.setRedisValue(userName,token)
                 # redis_client.__setitem__(userName,token)
 
 
@@ -125,7 +128,7 @@ class Login(Resource):
                 result = DB.readData("delete from mydb.login_details where username='" + userName + "';")
 
                 response = jsonify({"message": "Successfully Deleted"})
-                rediscon.__delitem__(userName)
+                redisconnection.delRedisValue(userName)
 
             else:
                 response = jsonify({"message": "Invalid Credentials"})
@@ -134,60 +137,61 @@ class Login(Resource):
 class ApiJWTAuth(Resource):
 
     def get(self):
+        return ApiJWTAuthentication.validateJwt(request.headers)
 
-        headersvalue = request.headers
-        if 'jwt-token' in headersvalue:
-            token = headersvalue.get("jwt-token")
-            jwtAuth=JWTHandling.decode_auth_token(token)
+        # headersvalue = request.headers
+        # if 'jwt-token' in headersvalue:
+        #     token = headersvalue.get("jwt-token")
+        #     jwtAuth=JWTHandling.decode_auth_token(token)
+        #
+        #     if jwtAuth.find("expired") >= 0 or jwtAuth.find("Invalid") >= 0 :
+        #         return jsonify({"message":"Invalid JWT"})
+        #     elif rediscon.exists(jwtAuth):
+        #         return jsonify({"message":"Valid JWT","username":jwtAuth})
+        #     else:
+        #         return jsonify({"Message":"Please Create new JWT Token"})
+        # else:
+        #     return jsonify({"message": "JWT Token is Required"})
 
-            if jwtAuth.find("expired") >= 0 or jwtAuth.find("Invalid") >= 0 :
-                return jsonify({"message":"Invalid JWT"})
-            elif rediscon.exists(jwtAuth):
-                return jsonify({"message":"Valid JWT","username":jwtAuth})
-            else:
-                return jsonify({"Message":"Please Create new JWT Token"})
-        else:
-            return jsonify({"message": "JWT Token is Required"})
 
-
-class JWTHandling:
-
-    @classmethod
-    def decode_auth_token(cls,auth_token):
-        """
-        Decodes the auth token
-        :param auth_token:
-        :return: integer|string
-        """
-        print(auth_token)
-        try:
-            payload = jwt.decode(auth_token, app.config['SECRET_KEY'])
-            return payload['username']
-        except jwt.ExpiredSignatureError:
-            return 'Signature expired. Please log in again.'
-        except jwt.InvalidTokenError:
-            return 'Invalid token. Please log in again.'
-
-    @classmethod
-    def encode_auth_token(self, user_id):
-        """
-        Generates the Auth Token
-        :return: string
-        """
-        print("ins"+user_id)
-        try:
-            payload = {
-                'exp': datetime.datetime.utcnow() + datetime.timedelta( minutes=5),
-
-                'username': user_id
-            }
-            return jwt.encode(
-                payload,
-                app.config.get('SECRET_KEY'),
-                algorithm='HS256'
-            )
-        except Exception as e:
-            return e
+# class JWTHandling:
+#
+#     @classmethod
+#     def decode_auth_token(cls,auth_token):
+#         """
+#         Decodes the auth token
+#         :param auth_token:
+#         :return: integer|string
+#         """
+#         print(auth_token)
+#         try:
+#             payload = jwt.decode(auth_token, app.config['SECRET_KEY'])
+#             return payload['username']
+#         except jwt.ExpiredSignatureError:
+#             return 'Signature expired. Please log in again.'
+#         except jwt.InvalidTokenError:
+#             return 'Invalid token. Please log in again.'
+#
+#     @classmethod
+#     def encode_auth_token(self, user_id):
+#         """
+#         Generates the Auth Token
+#         :return: string
+#         """
+#         print("ins"+user_id)
+#         try:
+#             payload = {
+#                 'exp': datetime.datetime.utcnow() + datetime.timedelta( minutes=5),
+#
+#                 'username': user_id
+#             }
+#             return jwt.encode(
+#                 payload,
+#                 app.config.get('SECRET_KEY'),
+#                 algorithm='HS256'
+#             )
+#         except Exception as e:
+#             return e
 
     def delete(self):
         jsonvalue = request.json
@@ -246,5 +250,6 @@ api.add_resource(ApiJWTAuth, '/validatejwt')
 
 if __name__ == '__main__':
     DB.setConnection("mydb")
+    redisconnection.setcon()
     app.run(debug=True)
 
