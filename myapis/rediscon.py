@@ -9,7 +9,7 @@ class redisconnection:
 
         self.rediscon = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, password='password',
                                               socket_timeout=None, connection_pool=None, charset='utf-8',
-                                              errors='strict', unix_socket_path=None)
+                                              errors='strict', unix_socket_path=None,decode_responses=True)
 
     @classmethod
     def getcon(self):
@@ -21,11 +21,18 @@ class redisconnection:
 
     @classmethod
     def getRedisValue(self,key):
-        return self.getcon().__getitem__(key)
+        try:
+            return self.getcon().__getitem__(key)
+        except Exception as e:
+            return str(e)
 
     @classmethod
     def delRedisValue(self,key):
         self.getcon().__delitem__(key)
+        try:
+            self.getcon().__delitem__(key)
+        except Exception as e:
+            pass
 
     @classmethod
     def isKeyExist(self,key):

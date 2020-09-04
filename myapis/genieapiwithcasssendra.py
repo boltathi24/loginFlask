@@ -9,6 +9,7 @@ from cassandra.cluster import Cluster, BatchStatement
 from cassandra.query import SimpleStatement
 import jwt,datetime
 import redis
+import json
 
 from cassandra.auth import PlainTextAuthProvider
 
@@ -94,10 +95,17 @@ class Login(Resource):
             if(login_success):
 
                 print(userName)
-                token=ApiJWTAuthentication.encode_auth_token(userName)
-                dec=token.decode('utf-8')
-                response=jsonify(token=dec)
-                redisconnection.setRedisValue(userName,token)
+                refToken=json.loads(ApiJWTAuthentication.getRefreshToken(userName))
+
+                refToken=refToken.get('jwt')
+                accessToken=json.loads(ApiJWTAuthentication.getAccessToken(refToken))
+                accessToken=accessToken.get('jwt')
+                # refToken=refToken.decode('utf-8')
+                # accessToken = accessToken.decode('utf-8')
+                response=jsonify({"refreshToken":refToken,"accessToken":accessToken})
+
+                redisconnection.setRedisValue(userName,refToken)
+
                 # redis_client.__setitem__(userName,token)
 
 
@@ -134,10 +142,52 @@ class Login(Resource):
                 response = jsonify({"message": "Invalid Credentials"})
         return response
 
-class ApiJWTAuth(Resource):
+class AccessTokenProvider(Resource):
 
     def get(self):
-        return ApiJWTAuthentication.validateJwt(request.headers)
+        return ApiJWTAuthentication.getAccessTokenWithRefreshToken(request.headers)
+
+class AccessTokenValidator(Resource):
+
+    def get(self):
+        return ApiJWTAuthentication.validateAccessToken(request.headers)
+
+#Handle Sign up Operation
+class SignUp(Resource):
+
+    def post(self):
+        jsonvalue = request.json
+        userName = jsonvalue.get("username")
+
+        password = jsonvalue.get("password")
+        password = bcrypt.hash(password)
+
+        response = ""
+        try:
+            query = "INSERT INTO mydb.login_details (username, password,user_id) VALUES ('"+userName+"' , '"+password+"',1);"
+
+            responseOfUpdate=DB.updateData(query)
+            if responseOfUpdate.find("Successful") >= 0:
+                response = jsonify({"message":"Account Creation is successful"})
+            else:
+                response =  jsonify({"message":"Error in Account Creation "})
+
+        except Exception as e:
+            print(e)
+            response = jsonify({"message":"Error in Account Creation "})
+        return response
+
+
+api.add_resource(SignUp, '/signup')
+api.add_resource(Login, '/login','/delete')
+api.add_resource(AccessTokenValidator, '/validatejwt')
+api.add_resource(AccessTokenProvider,'/getAccessToken')
+
+if __name__ == '__main__':
+    DB.setConnection("mydb")
+    redisconnection.setcon()
+    app.run(debug=True)
+
 
         # headersvalue = request.headers
         # if 'jwt-token' in headersvalue:
@@ -193,63 +243,27 @@ class ApiJWTAuth(Resource):
 #         except Exception as e:
 #             return e
 
-    def delete(self):
-        jsonvalue = request.json
-        userName = jsonvalue.get("username")
-        password = jsonvalue.get("password")
-        result= DB.readData("select password from mydb.login_details where username='"+userName+"'")
-
-        if not result:
-            response = jsonify({"message":"User Doesnt Exist"})
-        else:
-            for row in result:
-              hashed_password=row.password
-            login_success=False
-            print(bcrypt.verify(password, hashed_password))
-            if bcrypt.verify(password, hashed_password):
-                login_success=True
-            if(login_success):
-                updateMsg = DB.updateData("Delete from mydb.login_details where username='" + userName + "';")
-                if updateMsg.find("Successful") >= 0:
-                    response= jsonify({"message":"Account Deletion is successful"})
-                else:
-                    response= jsonify({"message":"Error deleting Account"})
-            else:
-                response= jsonify({"message":"Please Enter Valid Credentials"})
-        return response
-
-#Handle Sign up Operation
-class SignUp(Resource):
-
-    def post(self):
-        jsonvalue = request.json
-        userName = jsonvalue.get("username")
-
-        password = jsonvalue.get("password")
-        password = bcrypt.hash(password)
-
-        response = ""
-        try:
-            query = "INSERT INTO mydb.login_details (username, password,user_id) VALUES ('"+userName+"' , '"+password+"',1);"
-
-            responseOfUpdate=DB.updateData(query)
-            if responseOfUpdate.find("Successful") >= 0:
-                response = jsonify({"message":"Account Creation is successful"})
-            else:
-                response =  jsonify({"message":"Error in Account Creation "})
-
-        except Exception as e:
-            print(e)
-            response = jsonify({"message":"Error in Account Creation "})
-        return response
-
-
-api.add_resource(SignUp, '/signup')
-api.add_resource(Login, '/login','/delete')
-api.add_resource(ApiJWTAuth, '/validatejwt')
-
-if __name__ == '__main__':
-    DB.setConnection("mydb")
-    redisconnection.setcon()
-    app.run(debug=True)
-
+    # def delete(self):
+    #     jsonvalue = request.json
+    #     userName = jsonvalue.get("username")
+    #     password = jsonvalue.get("password")
+    #     result= DB.readData("select password from mydb.login_details where username='"+userName+"'")
+    #
+    #     if not result:
+    #         response = jsonify({"message":"User Doesnt Exist"})
+    #     else:
+    #         for row in result:
+    #           hashed_password=row.password
+    #         login_success=False
+    #         print(bcrypt.verify(password, hashed_password))
+    #         if bcrypt.verify(password, hashed_password):
+    #             login_success=True
+    #         if(login_success):
+    #             updateMsg = DB.updateData("Delete from mydb.login_details where username='" + userName + "';")
+    #             if updateMsg.find("Successful") >= 0:
+    #                 response= jsonify({"message":"Account Deletion is successful"})
+    #             else:
+    #                 response= jsonify({"message":"Error deleting Account"})
+    #         else:
+    #             response= jsonify({"message":"Please Enter Valid Credentials"})
+    #     return response
