@@ -15,18 +15,12 @@ from cassandra.auth import PlainTextAuthProvider
 
 from myapis.rediscon import redisconnection
 from myapis.JWTHandling import ApiJWTAuthentication
+from myapis.Encryption import EncryptionAlg
 
 app = Flask(__name__)
 api = Api(app)
 
 
-# REDIS_URL = "redis://:password@127.0.0.1:6379/0"
-# app.config['SECRET_KEY']="SecretykeytoGetStarted"
-# redis_client = FlaskRedis(app)
-
-
-
-# rediscon = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, password='password', socket_timeout=None, connection_pool=None, charset='utf-8', errors='strict', unix_socket_path=None)
 
 #Handles DB Operation
 class DB:
@@ -98,11 +92,14 @@ class Login(Resource):
                 refToken=json.loads(ApiJWTAuthentication.getRefreshToken(userName))
 
                 refToken=refToken.get('jwt')
-                accessToken=json.loads(ApiJWTAuthentication.getAccessToken(refToken))
+
+                encrypted_ref=EncryptionAlg.getEncryptedMsg(refToken)
+                accessToken=json.loads(ApiJWTAuthentication.getAccessToken(encrypted_ref))
                 accessToken=accessToken.get('jwt')
                 # refToken=refToken.decode('utf-8')
                 # accessToken = accessToken.decode('utf-8')
-                response=jsonify({"refreshToken":refToken,"accessToken":accessToken})
+
+                response=jsonify({"refreshToken":encrypted_ref,"accessToken":accessToken})
 
                 redisconnection.setRedisValue(userName,refToken)
 
@@ -186,7 +183,8 @@ api.add_resource(AccessTokenProvider,'/getAccessToken')
 if __name__ == '__main__':
     DB.setConnection("mydb")
     redisconnection.setcon()
-    app.run(debug=True)
+    EncryptionAlg.initEncrypt()
+    app.run(host="127.0.0.1",port=8080,debug=True)
 
 
         # headersvalue = request.headers

@@ -3,6 +3,7 @@ import jwt
 import datetime
 import json
 from myapis.rediscon import redisconnection
+from myapis.Encryption import EncryptionAlg
 
 
 
@@ -18,10 +19,14 @@ class ApiJWTAuthentication():
         print(headervalue)
         if 'jwt-token' in headervalue:
             refreshToken=headervalue.get('jwt-token')
-            refreshTokenDecodeResponse = json.loads(cls.decodeRefreshTokenForUserName(refreshToken))
+            decryptedRefToken=EncryptionAlg.getDecryptedMsg(refreshToken)
+
+            refreshTokenDecodeResponse = json.loads(cls.decodeRefreshTokenForUserName(decryptedRefToken))
+
             if refreshTokenDecodeResponse.get('message').find("success") >= 0:
                 redisDbToken = redisconnection.getRedisValue(refreshTokenDecodeResponse.get('username'))
-                if redisDbToken.find(refreshToken) >=0:
+
+                if redisDbToken.find(decryptedRefToken) >=0:
                     return json.loads(cls.getAccessToken(refreshToken))
                 else:
                     return jsonify({"message":"Invalid Refresh Token"})
@@ -43,12 +48,17 @@ class ApiJWTAuthentication():
                 token = headersvalue.get("jwt-token")
 
                 accessTokenDecodeResponse=json.loads(cls.decodeAccesshTokenForRefreshToken(token)) #Getting refresh Token From Token
-                print(accessTokenDecodeResponse)
+
+
                 if accessTokenDecodeResponse.get('message').find("success") >= 0 :
-                    refreshTokenDecodeResponse=json.loads(cls.decodeRefreshTokenForUserName(accessTokenDecodeResponse.get('refreshToken')))
+
+                    decryptedRefToken=EncryptionAlg.getDecryptedMsg(accessTokenDecodeResponse.get('refreshToken'))
+
+                    refreshTokenDecodeResponse=json.loads(cls.decodeRefreshTokenForUserName(decryptedRefToken))
                     if refreshTokenDecodeResponse.get('message').find("success") >=0:
                         redisDbToken=redisconnection.getRedisValue(refreshTokenDecodeResponse.get('username')) #Checking the Refresh Token in Redis
-                        if redisDbToken.find(accessTokenDecodeResponse.get('refreshToken')) >=0:
+
+                        if redisDbToken.find(decryptedRefToken) >=0:
                             return jsonify({"message":"success","username":refreshTokenDecodeResponse.get('username')})
                         else:
                             return jsonify({"message":"invalid Refresh Token"}) #Session Terminated
@@ -93,6 +103,8 @@ class ApiJWTAuthentication():
             return json.dumps({"message": "Expired Access Token"})
         except jwt.InvalidTokenError:
             return json.dumps({"message": "Invalid access Token"})
+
+
 
 
 
